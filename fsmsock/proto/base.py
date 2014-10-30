@@ -63,6 +63,9 @@ class Transport():
     def ready(self):
         return (self._state == self.READY)
 
+    def queue(self):
+        self._fsm._epoll.modify(self.fileno(), select.EPOLLOUT | select.EPOLLIN)
+
     def _check_timers(self, field, state, tm = None):
         if self._state == self.TIMEOUTED:
             return True
@@ -357,6 +360,9 @@ class UdpTransport(Transport):
         self._retries = 0
         self._timeout = 0.0
         self._state = self.INIT
+
+    def queue(self):
+        self.request()
 
     @property
     def sockaddr(self):
