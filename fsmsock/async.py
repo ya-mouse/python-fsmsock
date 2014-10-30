@@ -7,28 +7,34 @@ class FSMSock():
     def __init__(self):
         self._cli = []
         self._fds = {}
-        self._udp = {}
+        self._udptrans = None
         self._epoll = select.epoll()
 
-    def push(self, client):
-        client.set_fsm(self)
+    def register(self, client):
+        client.register(self)
+        self._cli.append(client)
+
+    def unregister(self, client):
+        self._cli.remove(client)
+        fileno = client.fileno()
+        if fileno != -1:
+            self._epoll.unregister(fileno)
+            del self._fds[fileno]
+        client.disconnect()
+
+    def connect(self, client):
+        self.register(client)
+        client.connect()
 
     def tick(self, timeout=0.3):
         try:
             events = self._epoll.poll(timeout)
 #        except InterruptedError:
-        except IOError:
+        except IOError as e:
             return
         tm = time()
         for fileno, event in events:
             c = self._fds.get(fileno)
-            if c == None:
-                # Special handling for UdpClient
-                if fileno == proto.base.UdpClient.fileno():
-                    c = proto.base.UdpClient.process()
-                    if c != None:
-                        c.request()
-                continue
             if event & select.EPOLLHUP:
                 c.disconnect()
                 epoll.unregister(fileno)
@@ -43,6 +49,7 @@ class FSMSock():
         # Iterate over clients
         tm = time()
         for c in self._cli:
+            """
             if not c.connected():
                 if c.timeouted(tm):
                     if isinstance(c, proto.base.UdpClient):
@@ -55,13 +62,29 @@ class FSMSock():
                             self._epoll.register(c.fileno(), select.EPOLLOUT)
                             self._fds[c.fileno()] = c
             elif c.expired(tm):
-                if isinstance(c, proto.base.UdpClient):
+            """
+            if c.expired(tm):
+                if isinstance(c, base.UdpTransport):
                     c.request()
                 else:
                     try:
+                        print(type(c))
                         self._epoll.modify(c.fileno(), select.EPOLLOUT | select.EPOLLIN)
                     except Exception as e:
                         pass
 
-    def loop(self):
-        pass
+    def run(self):
+        return len(self._cli) > 0
+
+    def register_udp(self):
+        if self.udp_registered():
+            return self._udptrans
+
+        self._udptrans = base.UdpAbstractTransport()
+        self._udptrans.register(self)
+        self._udptrans.connect()
+
+        return self._udptrans
+
+    def udp_registered(self):
+        return not self._udptrans is None

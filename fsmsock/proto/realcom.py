@@ -1,11 +1,11 @@
 from struct import pack, unpack
 import socket
 
-from . import TcpClient
+from . import TcpTransport
 from . import _aspp as aspp
 
-class _RealcomCmdClient(TcpClient):
-    CONFIGURED = TcpClient.LAST + 1
+class _RealcomCmdClient(TcpTransport):
+    CONFIGURED = TcpTransport.LAST + 1
 
     def __init__(self, client, port, cfg):
         self._client = client
@@ -79,7 +79,7 @@ class _RealcomCmdClient(TcpClient):
             return False
         return self._process_cmd(data)
 
-class RealcomClient(TcpClient):
+class RealcomClient(TcpTransport):
     def __init__(self, host, interval, port, cfg):
         super().__init__(host, interval)
         self._cmd = _RealcomCmdClient(self, port, cfg)

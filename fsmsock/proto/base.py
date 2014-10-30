@@ -1,6 +1,6 @@
 from time import time,sleep
 from struct import pack, unpack
-import os, sys, fcntl
+import os, sys, fcntl, select
 import socket, serial
 import traceback
 import logging
@@ -42,6 +42,9 @@ class Transport():
 
     def register(self, fsm):
         self._fsm = fsm
+
+    def stop(self):
+        self._fsm.unregister(self)
 
     def connect(self):
         if self.connected():
@@ -173,7 +176,7 @@ class Transport():
                 self.disconnect()
                 return ''
 
-class TcpClient(Transport):
+class TcpTransport(Transport):
     def __init__(self, host, interval, sock_params):
         self._port = sock_params[2]
         self._sock_params = sock_params
@@ -205,8 +208,8 @@ class TcpClient(Transport):
             self._expire = self._timeout = time() + 5.0
             return False
 
-        self._fsm._cli.append(self)
         self._fsm._fds[self.fileno()] = self
+        self._fsm._epoll.register(self.fileno(), select.EPOLLIN)
 
         self._sock.setblocking(0)
 
@@ -239,15 +242,68 @@ class TcpClient(Transport):
             return False # raise socket.error(err, errorcode[err])
             # return False
 
-class UdpClient(Transport):
+class UdpAbstractTransport(Transport):
+    def __init__(self):
+        self._cli = {}
+        super().__init__(None, 0.0)
+
+    def connect(self):
+        if self.connected():
+            return True
+
+        self._sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        self._sock.setblocking(False)
+        for b in socket.SO_RCVBUF, socket.SO_SNDBUF:
+            bsize = self._sock.getsockopt(socket.SOL_SOCKET, b)
+#            self._l.debug(b, ":", bsize)
+            if bsize < 8388544:
+                self._sock.setsockopt(socket.SOL_SOCKET, b, 8388544)
+
+        self._fsm._fds[self.fileno()] = self
+        self._fsm._epoll.register(self.fileno(), select.EPOLLIN)
+        return True
+
+    def process(self, nr = None):
+        if nr == None:
+            nr = 131070
+        data, sockaddr = self.read(nr)
+        if sockaddr == None:
+            return None
+        cli = self._cli[sockaddr]
+        if len(data) == 0:
+            cli.disconnect()
+        elif cli._state != Transport.WAIT_ANSWER:
+            cli.disconnect()
+            cli._unord = True
+            cli._l.warning("{0}: unordered answer".format(cli._host))
+            #data = ''
+            return None
+        if cli.process_data(data):
+            cli.request()
+        # We don't want EPOLLOUT to be set
+        return None
+
+    def read(self, size):
+        try:
+            result = self._sock.recvfrom(size)
+            return result
+        except socket.error as why:
+            if why.args[0] == EWOULDBLOCK:
+                return ('', None)
+            elif why.args[0] in _DISCONNECTED:
+                return ('', None)
+            else:
+                return ('', None)
+
+    def request(self, tm = None):
+        return False
+
+class UdpTransport(Transport):
     def __init__(self, host, interval, port):
         self._port = port
         self._sockaddr = None
         self._unord = False
         super().__init__(host, interval)
-
-    def register(self, fsm):
-        super().register(fsm)
 
     def connect(self):
         if self._unord:
@@ -258,13 +314,13 @@ class UdpClient(Transport):
 
         super().connect()
 
+        self._udp = self._fsm.register_udp()
+
         if self._sockaddr != None:
             try:
-                del self._fsm.udp[self._sockaddr]
+                del self._udp._cli[self._sockaddr]
             except:
                 pass
-
-        self._fsm.create_udp()
 
         try:
             for res in socket.getaddrinfo(self._host,
@@ -283,7 +339,7 @@ class UdpClient(Transport):
                         self._sockaddr = ('::ffff:'+res[4][0], res[4][1], 0, 0)
                     else:
                         self._sockaddr = res[4]
-                self._fsm._udp[self._sockaddr] = self
+                self._udp._cli[self._sockaddr] = self
                 break
         except Exception as e:
             self._l.critical(e)
@@ -302,9 +358,7 @@ class UdpClient(Transport):
         self._timeout = 0.0
         self._state = self.INIT
 
-    def fileno(self):
-        return self._fsm.udp_fileno()
-
+    @property
     def sockaddr(self):
         return self._sockaddr
 
@@ -312,40 +366,11 @@ class UdpClient(Transport):
         self._retries = 0
         return False
 
-    def process(self, nr = None):
-        if nr == None:
-            nr = 131070
-        data, sockaddr = self.read(nr)
-        if sockaddr == None:
-            return None
-        cli = self._fsm.udp[sockaddr]
-        if len(data) == 0:
-            cli.disconnect()
-        elif cli._state != Transport.WAIT_ANSWER:
-            cli.disconnect()
-            cli._unord = True
-            cli._l.warning("{0}: unordered answer".format(cli._host))
-            #data = ''
-            return None
-        if cli.process_data(data):
-            return cli
-        return None
-
-    def read(self, size):
-        try:
-            result = self._fsm._udpsock.recvfrom(size)
-            return result
-        except socket.error as why:
-            if why.args[0] == EWOULDBLOCK:
-                return ('', None)
-            elif why.args[0] in _DISCONNECTED:
-                return ('', None)
-            else:
-                return ('', None)
-
     def _write(self, data):
+        if data is None:
+            return 0
         try:
-            result = self._fsm._udpsock.sendto(data, self._sockaddr)
+            result = self._udp._sock.sendto(data, self._sockaddr)
             if result < 0:
                 return 0
             return result
@@ -362,7 +387,7 @@ class UdpClient(Transport):
     def _read(self, size):
         return ''
 
-class SerialClient(Transport):
+class SerialTransport(Transport):
     def __init__(self, host, interval, serial):
         self._serial = serial
         super().__init__(host, interval)
@@ -408,77 +433,3 @@ class SerialClient(Transport):
             else:
                 self.disconnect()
                 return ''
-
-class _RealcomCmdClient(TcpClient):
-    CONFIGURED = TcpClient.LAST + 1
-
-    def __init__(self, client):
-        self._client = client
-        self._cfg = self._client._serial
-        super().__init__(client._agent, client._host, client._type, client._tag, client._interval,
-                         (socket.AF_INET, socket.SOCK_STREAM, 16 + self._client._port))
-
-    def _init_port(self):
-        mode = aspp.bits.get(self._cfg['bits'], aspp.bits[8])
-        mode |= aspp.parity.get(self._cfg['parity'], aspp.parity['N'])
-        baud = aspp.bauds.get(self._cfg['baud'], aspp.bauds[9600])
-
-        uart_mcr_dtr = 0
-        uart_mcr_rts = 0
-        crtscts = 0
-        ixon = 0
-        ixoff = 0
-        cmd = pack('10B3B', aspp.CMD_PORT_INIT, 8, baud, mode,
-                          uart_mcr_dtr, uart_mcr_rts, crtscts, crtscts,
-                          ixon, ixoff,
-                          aspp.CMD_TX_FIFO, 16, 16)
-        self._state = self.WAIT_ANSWER
-        self._write(cmd)
-
-    def _process_cmd(self, data):
-        rc = False
-        nr = 0
-        i = 0
-        size = len(data)
-        while (size):
-#            self._l.debug(data[i])
-            if data[i] == aspp.CMD_POLLING:
-                if size < 3:
-                    size = 0
-                    continue
-                cmd = pack('3B', aspp.CMD_ALIVE, 1, data[i+2])
-#                self._l.debug("CMD:",cmd)
-                nr = self._write(cmd)
-                rc = True
-            else:
-                try:
-                    nr = aspp.commands[data[i]]
-                    if data[i] == aspp.CMD_PORT_INIT:
-                        self._state = self.CONFIGURED
-                except:
-                    nr = size
-
-            i += nr
-            size -= nr
-
-        return rc
-
-    def expired(self, tm = None):
-        return False
-
-    def timeouted(self, tm = None):
-        return False
-
-    def ready(self):
-        return self._state == self.CONFIGURED
-
-    def request(self, tm = None):
-        if self._state == self.READY:
-            self._init_port()
-        return True
-
-    def process(self):
-        data = super().process()
-        if len(data) == 0:
-            return False
-        return self._process_cmd(data)
