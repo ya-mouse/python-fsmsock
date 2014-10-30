@@ -7,15 +7,15 @@ from time import time
 from . import UdpTransport
 
 class SnmpUdpClient(UdpTransport):
-    def __init__(self, host, interval, proto, community, variables, port=161):
-        self._proto = {
+    def __init__(self, host, interval, version, community, variables, port=161):
+        self._version = {
             '1':  pysnmp.proto.api.protoVersion1,
             '2c': pysnmp.proto.api.protoVersion2c,
-        }.get(proto, pysnmp.proto.api.protoVersion1)
+        }.get(version, pysnmp.proto.api.protoVersion1)
         self._community = community
         self._vars = variables
         # Protocol verison to use
-        self._pmod = pysnmp.proto.api.protoModules[self._proto]
+        self._pmod = pysnmp.proto.api.protoModules[self._version]
         self._value = None
         super().__init__(host, interval, port)
 

@@ -64,14 +64,7 @@ class FSMSock():
             elif c.expired(tm):
             """
             if c.expired(tm):
-                if isinstance(c, base.UdpTransport):
-                    c.request()
-                else:
-                    try:
-                        print(type(c))
-                        self._epoll.modify(c.fileno(), select.EPOLLOUT | select.EPOLLIN)
-                    except Exception as e:
-                        pass
+                c.queue()
 
     def run(self):
         return len(self._cli) > 0
