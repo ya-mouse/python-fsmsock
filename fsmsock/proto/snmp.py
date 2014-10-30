@@ -16,7 +16,6 @@ class SnmpUdpClient(UdpTransport):
         self._vars = variables
         # Protocol verison to use
         self._pmod = pysnmp.proto.api.protoModules[self._version]
-        self._value = None
         super().__init__(host, interval, port)
 
     def _build_buf(self):
@@ -55,3 +54,6 @@ class SnmpUdpClient(UdpTransport):
         self._state = self.READY
         self.stop()
         return False
+
+    def _value(self, oid, val, tm):
+        pass
