@@ -49,6 +49,11 @@ class FSMSock():
         # Iterate over clients
         tm = time()
         for c in self._cli:
+            if not c.connected():
+                print('Not connected: %s' % c)
+                if c.timeouted(tm):
+                    print('Timeouted: %s' % c)
+                    self.unregister(c)
             """
             if not c.connected():
                 if c.timeouted(tm):
@@ -61,7 +66,6 @@ class FSMSock():
                         if c.fileno() != -1:
                             self._epoll.register(c.fileno(), select.EPOLLOUT)
                             self._fds[c.fileno()] = c
-            elif c.expired(tm):
             """
             if c.expired(tm):
                 c.queue()

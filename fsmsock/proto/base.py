@@ -364,6 +364,10 @@ class UdpTransport(Transport):
     def queue(self):
         self.request()
 
+    def fileno(self):
+        # Always return `-1' instead of _udp.fileno() to keep UDP FD
+        return -1
+
     @property
     def sockaddr(self):
         return self._sockaddr
