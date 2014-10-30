@@ -21,6 +21,7 @@ class Transport():
     LAST = WAIT_ANSWER
 
     def __init__(self, host, interval, logger=logging.getLogger('default')):
+        self._fsm = None
         self._sock = None
         self._host = host
         self._interval = interval
@@ -35,10 +36,12 @@ class Transport():
         self._state = self.INIT
         self._l = logger
         self._build_buf()
-        self.connect()
 
     def _build_buf(self):
         pass
+
+    def register(self, fsm):
+        self._fsm = fsm
 
     def connect(self):
         if self.connected():
@@ -136,10 +139,6 @@ class Transport():
             return ''
         return data
 
-    def set_fsm(self, fsm):
-        fsm._cli.append(self)
-        fsm._fds[self.fileno()] = self
-
     def _write(self, data):
         if self._sock == None:
             return 0
@@ -206,6 +205,9 @@ class TcpClient(Transport):
             self._expire = self._timeout = time() + 5.0
             return False
 
+        self._fsm._cli.append(self)
+        self._fsm._fds[self.fileno()] = self
+
         self._sock.setblocking(0)
 
         if res[1] == socket.SOCK_STREAM:
@@ -238,23 +240,14 @@ class TcpClient(Transport):
             # return False
 
 class UdpClient(Transport):
-    sock = None
-    cli = {}
-
     def __init__(self, host, interval, port):
-        if UdpClient.sock == None:
-            UdpClient.sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            UdpClient.sock.setblocking(False)
-            for b in socket.SO_RCVBUF, socket.SO_SNDBUF:
-                bsize = UdpClient.sock.getsockopt(socket.SOL_SOCKET, b)
-#                self._l.debug(b, ":", bsize)
-                if bsize < 8388544:
-                    UdpClient.sock.setsockopt(socket.SOL_SOCKET, b, 8388544)
-
         self._port = port
         self._sockaddr = None
         self._unord = False
         super().__init__(host, interval)
+
+    def register(self, fsm):
+        super().register(fsm)
 
     def connect(self):
         if self._unord:
@@ -267,9 +260,11 @@ class UdpClient(Transport):
 
         if self._sockaddr != None:
             try:
-                del UdpClient.cli[self._sockaddr]
+                del self._fsm.udp[self._sockaddr]
             except:
                 pass
+
+        self._fsm.create_udp()
 
         try:
             for res in socket.getaddrinfo(self._host,
@@ -288,7 +283,7 @@ class UdpClient(Transport):
                         self._sockaddr = ('::ffff:'+res[4][0], res[4][1], 0, 0)
                     else:
                         self._sockaddr = res[4]
-                UdpClient.cli[self._sockaddr] = self
+                self._fsm._udp[self._sockaddr] = self
                 break
         except Exception as e:
             self._l.critical(e)
@@ -307,13 +302,8 @@ class UdpClient(Transport):
         self._timeout = 0.0
         self._state = self.INIT
 
-    
-
-    @classmethod
-    def fileno(cls, self=None):
-        if cls.sock == None:
-            return -1
-        return cls.sock.fileno()
+    def fileno(self):
+        return self._fsm.udp_fileno()
 
     def sockaddr(self):
         return self._sockaddr
@@ -322,14 +312,13 @@ class UdpClient(Transport):
         self._retries = 0
         return False
 
-    @classmethod
-    def process(cls, nr = None):
+    def process(self, nr = None):
         if nr == None:
             nr = 131070
-        data, sockaddr = cls.read(nr)
+        data, sockaddr = self.read(nr)
         if sockaddr == None:
             return None
-        cli = cls.cli[sockaddr]
+        cli = self._fsm.udp[sockaddr]
         if len(data) == 0:
             cli.disconnect()
         elif cli._state != Transport.WAIT_ANSWER:
@@ -342,10 +331,9 @@ class UdpClient(Transport):
             return cli
         return None
 
-    @classmethod
-    def read(cls, size):
+    def read(self, size):
         try:
-            result = cls.sock.recvfrom(size)
+            result = self._fsm._udpsock.recvfrom(size)
             return result
         except socket.error as why:
             if why.args[0] == EWOULDBLOCK:
@@ -357,7 +345,7 @@ class UdpClient(Transport):
 
     def _write(self, data):
         try:
-            result = UdpClient.sock.sendto(data, self._sockaddr)
+            result = self._fsm._udpsock.sendto(data, self._sockaddr)
             if result < 0:
                 return 0
             return result
