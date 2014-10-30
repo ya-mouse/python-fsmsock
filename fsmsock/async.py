@@ -41,10 +41,10 @@ class FSMSock():
                 continue
             if event & select.EPOLLOUT:
                 if c.request():
-                    epoll.modify(fileno, select.EPOLLIN)
+                    self._epoll.modify(fileno, select.EPOLLIN)
             if event & select.EPOLLIN:
                 if c.process():
-                    epoll.modify(fileno, select.EPOLLOUT)
+                    self._epoll.modify(fileno, select.EPOLLOUT)
 
         # Iterate over clients
         tm = time()
