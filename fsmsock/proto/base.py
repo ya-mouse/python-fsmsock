@@ -245,6 +245,12 @@ class TcpTransport(Transport):
             return False # raise socket.error(err, errorcode[err])
             # return False
 
+    def disconnect(self):
+        if self.fileno() != -1:
+            self._sock.shutdown()
+            self._sock.close()
+        super().disconnect()
+
 class UdpAbstractTransport(Transport):
     def __init__(self):
         self._cli = {}
