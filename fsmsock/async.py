@@ -1,3 +1,4 @@
+import atexit
 import socket, select
 from time import time
 
@@ -9,6 +10,7 @@ class FSMSock():
         self._fds = {}
         self._udptrans = None
         self._epoll = select.epoll()
+        atexit.register(self.atexit)
 
     def register(self, client):
         client.register(self)
@@ -85,3 +87,10 @@ class FSMSock():
 
     def udp_registered(self):
         return not self._udptrans is None
+
+    def atexit(self):
+        for c in self._cli:
+            try:
+                c.disconnect()
+            except:
+                pass
