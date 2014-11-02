@@ -45,10 +45,10 @@ class SnmpUdpClient(UdpTransport):
             error = self._pmod.apiPDU.getErrorStatus(pdu)
             if error:
                 self._l.critical("SNMP: %s" % error.prettyPrint())
-            elif not self._value is None:
+            else:
                 try:
                     for oid, val in self._pmod.apiPDU.getVarBinds(pdu):
-                        self._value(oid, val, tm)
+                        self.on_data(oid, val, tm)
                 except Exception as e:
                     self._l.critical(e)
         self._state = self.READY
