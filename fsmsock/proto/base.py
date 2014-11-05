@@ -56,7 +56,8 @@ class Transport():
         return True
 
     def disconnect(self):
-        import traceback
+#        import traceback
+        self.on_disconnect()
         if self._sock != None:
             self._sock.close()
         self._retries = 0
@@ -66,7 +67,7 @@ class Transport():
         self._state = self.INIT
 
     def on_disconnect(self):
-        self._fsm.unregister(self)
+        self.stop()
 
     def ready(self):
         return (self._state == self.READY)
