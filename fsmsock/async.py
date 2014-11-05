@@ -41,7 +41,7 @@ class FSMSock():
                 c.on_disconnect()
                 continue
             if event & select.EPOLLIN:
-                flags = c.process(tm)
+                flags = c.process()
                 if flags != -1:
 #                    print('PROCESS.', flags)
                     if c.connected():
@@ -81,6 +81,7 @@ class FSMSock():
         return not self._udptrans is None
 
     def atexit(self):
+        atexit.unregister(self.atexit)
         for c in self._cli:
             try:
                 c.disconnect()
