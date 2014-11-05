@@ -31,13 +31,12 @@ class SnmpUdpClient(UdpTransport):
 
         self._buf = encoder.encode(msg)
 
-    def process_data(self, data):
+    def process_data(self, data, tm = None):
         self._retries = 0
-        if len(data) == 0:
-            return False
 
         # Process data
-        tm = time()
+        if tm is None:
+            tm = time()
         while data:
             msg, data = decoder.decode(data, asn1Spec=self._pmod.Message())
             pdu = self._pmod.apiMessage.getPDU(msg)
@@ -55,5 +54,5 @@ class SnmpUdpClient(UdpTransport):
         self.stop()
         return False
 
-    def _value(self, oid, val, tm):
+    def on_data(self, oid, val, tm):
         pass

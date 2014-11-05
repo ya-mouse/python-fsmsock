@@ -49,22 +49,31 @@ class Transport():
     def connect(self):
         if self.connected():
             return True
-        self._expire = 0.0
-        self._timeout = time() + 5.0
+        # Make connection within N-seconds depending on current client stack size
+        self._expire = time() + (len(self._fsm._cli) / 10.0) % 5.0
+        # ...timeout within + 15.0 s
+        self._timeout = self._expire + 15.0
         return True
 
     def disconnect(self):
+        import traceback
         if self._sock != None:
             self._sock.close()
         self._retries = 0
-        self._timeout = time() + 5.0
+        self._expire = time() + 15.0
+        self._timeout = self._expire
+#        print('disconn', self, self._retries, self._state, self._timeout)
         self._state = self.INIT
+
+    def on_disconnect(self):
+        self._fsm.unregister(self)
 
     def ready(self):
         return (self._state == self.READY)
 
     def queue(self):
-        self._fsm._epoll.modify(self.fileno(), select.EPOLLOUT | select.EPOLLIN)
+        if self.fileno() != -1:
+            self._fsm._epoll.modify(self.fileno(), select.EPOLLOUT | select.EPOLLIN)
 
     def _check_timers(self, field, state, tm = None):
         if self._state == self.TIMEOUTED:
@@ -86,6 +95,7 @@ class Transport():
 
     def expired(self, tm = None):
         rc = self._check_timers(self._expire, self.EXPIRED, tm)
+#        print('is-expired: ', self, rc, (tm-self._expire), self._retries)
         if rc:
             self._retries += 1
             if self._retries >= self._max_retries:
@@ -95,6 +105,7 @@ class Transport():
 
     def timeouted(self, tm = None):
         rc = self._check_timers(self._timeout, self.TIMEOUTED, tm)
+#        print('is-timeouted: ', self, rc, (tm-self._timeout), self._retries)
         if rc:
             self._retries += 1
             if self._retries >= self._max_retries:
@@ -117,21 +128,21 @@ class Transport():
 #        self._l.debug("{0}: entering request ({1})".format(self._host, self._state))
         state = self._state
         if self._state == self.WAIT_ANSWER and not self.timeouted():
-            return False
+            return 0
         size = self.send_buf()
         if size > 0:
             self._state = self.WAIT_ANSWER
         elif size < 0:
-            return False
+            return 0
 #        else:
 #            self._l.debug("{0}: write failed".format(self._host))
         if tm == None:
             tm = time()
         self._expire = tm + self._interval
 #        if state != self.EXPIRED:
-        self._timeout = tm + 5.0
+        self._timeout = self._expire + 5.0
 #        self._l.debug(self._host, ":", self._expire, self._timeout)
-        return True
+        return select.EPOLLIN
 
     def process(self, nr = None):
         self._retries = 0
@@ -139,11 +150,14 @@ class Transport():
             nr = self._bufsize
         data = self._read(nr)
         if len(data) == 0:
-            return ''
+            return 0
         # If we didn't request anything
         if self._state != self.WAIT_ANSWER:
-            return ''
-        return data
+            return 0
+        return self.process_data(data)
+
+    def process_data(self, data):
+        return 0
 
     def _write(self, data):
         if self._sock == None:
@@ -155,9 +169,11 @@ class Transport():
             if why.args[0] == EWOULDBLOCK:
                 return 0
             elif why.args[0] in _DISCONNECTED:
+#                print(self, 'DISCONNECTED', why)
                 self.disconnect()
                 return 0
             else:
+#                print(self, why)
 #               raise
                 self.disconnect()
                 return 0
@@ -172,10 +188,12 @@ class Transport():
             if why.args[0] == EWOULDBLOCK:
                 return ''
             elif why.args[0] in _DISCONNECTED:
+#                print(self, 'DISCONNECTED', why)
                 self.disconnect()
                 return ''
             else:
 #               raise
+#                print(self, why)
                 self.disconnect()
                 return ''
 
@@ -246,10 +264,10 @@ class TcpTransport(Transport):
             # return False
 
     def disconnect(self):
-        if self.fileno() != -1:
-            self._sock.shutdown()
-            self._sock.close()
+        if self.connected():
+            self._sock.shutdown(socket.SHUT_RDWR)
         super().disconnect()
+        self._sock = None
 
 class UdpAbstractTransport(Transport):
     def __init__(self):
@@ -277,7 +295,7 @@ class UdpAbstractTransport(Transport):
             nr = 131070
         data, sockaddr = self.read(nr)
         if sockaddr == None:
-            return None
+            return -1
         cli = self._cli[sockaddr]
         if len(data) == 0:
             cli.disconnect()
@@ -286,11 +304,11 @@ class UdpAbstractTransport(Transport):
             cli._unord = True
             cli._l.warning("{0}: unordered answer".format(cli._host))
             #data = ''
-            return None
+            return -1
         if cli.process_data(data):
             cli.request()
         # We don't want EPOLLOUT to be set
-        return None
+        return -1
 
     def read(self, size):
         try:
@@ -363,9 +381,10 @@ class UdpTransport(Transport):
         return True
 
     def disconnect(self):
-        self._retries = 0
-        self._timeout = 0.0
-        self._state = self.INIT
+        super().disconnect()
+#        self._retries = 0
+#        self._timeout = 0.0
+#        self._state = self.INIT
 
     def queue(self):
         self.request()

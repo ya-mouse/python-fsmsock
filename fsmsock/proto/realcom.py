@@ -97,8 +97,8 @@ class _RealcomCmdClient(TcpTransport):
         self._state = self.WAIT_ANSWER
         self._write(cmd)
 
-    def _process_cmd(self, data):
-        rc = False
+    def process_data(self, data):
+        flags = 0
         nr = 0
         i = 0
         size = len(data)
@@ -111,7 +111,7 @@ class _RealcomCmdClient(TcpTransport):
                 cmd = pack('3B', CMD_ALIVE, 1, data[i+2])
 #                self._l.debug("CMD:",cmd)
                 nr = self._write(cmd)
-                rc = True
+                flags = select.EPOLLIN
             else:
                 try:
                     nr = aspp_commands[data[i]]
@@ -123,7 +123,7 @@ class _RealcomCmdClient(TcpTransport):
             i += nr
             size -= nr
 
-        return rc
+        return flags
 
     def expired(self, tm = None):
         return False
@@ -137,13 +137,8 @@ class _RealcomCmdClient(TcpTransport):
     def request(self, tm = None):
         if self._state == self.READY:
             self._init_port()
-        return True
-
-    def process(self):
-        data = super().process()
-        if len(data) == 0:
-            return False
-        return self._process_cmd(data)
+            return select.EPOLLIN
+        return 0
 
 class RealcomClient(TcpTransport):
     def __init__(self, host, interval, port, cfg):
