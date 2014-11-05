@@ -38,38 +38,30 @@ class FSMSock():
         for fileno, event in events:
             c = self._fds.get(fileno)
             if event & select.EPOLLHUP:
-                c.disconnect()
-                epoll.unregister(fileno)
+                c.on_disconnect()
                 continue
-            if event & select.EPOLLOUT:
-                if c.request():
-                    self._epoll.modify(fileno, select.EPOLLIN)
             if event & select.EPOLLIN:
-                if c.process():
-                    self._epoll.modify(fileno, select.EPOLLOUT)
+                flags = c.process(tm)
+                if flags != -1:
+#                    print('PROCESS.', flags)
+                    if c.connected():
+                        self._epoll.modify(fileno, flags)
+            if event & select.EPOLLOUT:
+                flags = c.request(tm)
+                if flags != -1:
+#                    print('REQUEST.', c.connected(), flags)
+                    if c.connected():
+                        self._epoll.modify(fileno, flags)
 
         # Iterate over clients
         tm = time()
         for c in self._cli:
-            if not c.connected():
-                print('Not connected: %s' % c)
-                if c.timeouted(tm):
-                    print('Timeouted: %s' % c)
-                    self.unregister(c)
-            """
-            if not c.connected():
-                if c.timeouted(tm):
-                    if isinstance(c, proto.base.UdpClient):
-                        c.connect()
-                    else:
-                        if c.fileno() != -1:
-                            del self._fds[c.fileno()]
-                        c.connect()
-                        if c.fileno() != -1:
-                            self._epoll.register(c.fileno(), select.EPOLLOUT)
-                            self._fds[c.fileno()] = c
-            """
-            if c.expired(tm):
+            if c.timeouted(tm):
+#                print('Timeouted: %s' % c)
+                if not c.connected():
+#                    print('Not connected: %s' % c)
+                    c.on_disconnect()
+            elif c.expired(tm):
                 c.queue()
 
     def run(self):
