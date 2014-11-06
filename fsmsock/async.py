@@ -17,11 +17,14 @@ class FSMSock():
         self._cli.append(client)
 
     def unregister(self, client):
-        self._cli.remove(client)
-        fileno = client.fileno()
-        if fileno != -1:
-            self._epoll.unregister(fileno)
-            del self._fds[fileno]
+        try:
+            self._cli.remove(client)
+            fileno = client.fileno()
+            if fileno != -1:
+                self._epoll.unregister(fileno)
+                del self._fds[fileno]
+        except:
+            pass
         client.disconnect()
 
     def connect(self, client):
