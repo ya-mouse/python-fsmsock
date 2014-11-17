@@ -302,7 +302,7 @@ class UdpAbstractTransport(Transport):
         elif cli._state != Transport.WAIT_ANSWER:
             cli.disconnect()
             cli._unord = True
-            cli._l.warning("{0}: unordered answer".format(cli._host))
+            logging.warning("{0}: unordered answer".format(cli._host))
             #data = ''
             return -1
         if cli.process_data(data):
