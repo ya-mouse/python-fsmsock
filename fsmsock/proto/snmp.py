@@ -1,4 +1,5 @@
 import socket
+import logging
 import pysnmp.proto.api
 from pyasn1.codec.ber import encoder, decoder
 from struct import pack, unpack
@@ -43,13 +44,13 @@ class SnmpUdpClient(UdpTransport):
             # Check for SNMP errors reported
             error = self._pmod.apiPDU.getErrorStatus(pdu)
             if error:
-                self._l.critical("SNMP: %s" % error.prettyPrint())
+                logging.critical("SNMP: %s" % error.prettyPrint())
             else:
                 try:
                     for oid, val in self._pmod.apiPDU.getVarBinds(pdu):
                         self.on_data(oid, val, tm)
                 except Exception as e:
-                    self._l.critical(e)
+                    logging.critical(e)
         self._state = self.READY
         self.stop()
         return False

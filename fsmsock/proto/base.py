@@ -20,7 +20,7 @@ class Transport():
     WAIT_ANSWER = 5
     LAST = WAIT_ANSWER
 
-    def __init__(self, host, interval, logger=logging.getLogger('default')):
+    def __init__(self, host, interval):
         self._fsm = None
         self._sock = None
         self._host = host
@@ -34,7 +34,6 @@ class Transport():
         self._bufsize = 1024
 
         self._state = self.INIT
-        self._l = logger
         self._build_buf()
 
     def _build_buf(self):
@@ -88,9 +87,9 @@ class Transport():
 #            return False
         if self._state != self.INIT:
 #            if state == self.EXPIRED:
-#                self._l.debug("{0}: expired {1}".format(self._host, self._retries))
+#                logging.debug("{0}: expired {1}".format(self._host, self._retries))
 #            else:
-#                self._l.debug("{0}: timeouted {1}".format(self._host, self._retries))
+#                logging.debug("{0}: timeouted {1}".format(self._host, self._retries))
             self._state = state
         return True
 
@@ -126,7 +125,7 @@ class Transport():
         return self._write(self._buf)
 
     def request(self, tm = None):
-#        self._l.debug("{0}: entering request ({1})".format(self._host, self._state))
+#        logging.debug("{0}: entering request ({1})".format(self._host, self._state))
         state = self._state
         if self._state == self.WAIT_ANSWER and not self.timeouted():
             return 0
@@ -136,13 +135,13 @@ class Transport():
         elif size < 0:
             return 0
 #        else:
-#            self._l.debug("{0}: write failed".format(self._host))
+#            logging.debug("{0}: write failed".format(self._host))
         if tm == None:
             tm = time()
         self._expire = tm + self._interval
 #        if state != self.EXPIRED:
         self._timeout = self._expire + 5.0
-#        self._l.debug(self._host, ":", self._expire, self._timeout)
+#        logging.debug(self._host, ":", self._expire, self._timeout)
         return select.EPOLLIN
 
     def process(self, nr = None):
@@ -283,7 +282,7 @@ class UdpAbstractTransport(Transport):
         self._sock.setblocking(False)
         for b in socket.SO_RCVBUF, socket.SO_SNDBUF:
             bsize = self._sock.getsockopt(socket.SOL_SOCKET, b)
-#            self._l.debug(b, ":", bsize)
+#            logging.debug(b, ":", bsize)
             if bsize < 8388544:
                 self._sock.setsockopt(socket.SOL_SOCKET, b, 8388544)
 
@@ -335,7 +334,7 @@ class UdpTransport(Transport):
 
     def connect(self):
         if self._unord:
-            self._l.debug('Connecting {0}...'.format(self._host))
+            logging.debug('Connecting {0}...'.format(self._host))
             self._unord = False
         if self.connected():
             return True
@@ -370,7 +369,7 @@ class UdpTransport(Transport):
                 self._udp._cli[self._sockaddr] = self
                 break
         except Exception as e:
-            self._l.critical(e)
+            logging.critical(e)
 
         if self._sockaddr == None:
             # Fallback to the generic socket, queue a retry

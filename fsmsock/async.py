@@ -1,4 +1,5 @@
 import atexit
+import logging
 import socket, select
 from time import time
 
@@ -46,13 +47,13 @@ class FSMSock():
             if event & select.EPOLLIN:
                 flags = c.process()
                 if flags != -1:
-#                    print('PROCESS.', flags)
+#                    logger.debug('PROCESS.{0}'.format(flags))
                     if c.connected():
                         self._epoll.modify(fileno, flags)
             if event & select.EPOLLOUT:
                 flags = c.request(tm)
                 if flags != -1:
-#                    print('REQUEST.', c.connected(), flags)
+#                    logger.debug('REQUEST.{0} {1}'.format(c.connected(), flags))
                     if c.connected():
                         self._epoll.modify(fileno, flags)
 
@@ -60,9 +61,9 @@ class FSMSock():
         tm = time()
         for c in self._cli:
             if c.timeouted(tm):
-#                print('Timeouted: %s' % c)
+#                logger.debug('Timeouted: {0}'.format(c))
                 if not c.connected():
-#                    print('Not connected: %s' % c)
+#                    logger.debug('Not connected: {0}'.format(c))
                     c.on_disconnect()
             elif c.expired(tm):
                 c.queue()

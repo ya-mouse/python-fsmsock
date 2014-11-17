@@ -14,7 +14,7 @@ with open('requirements.txt') as f:
 
 setup(
     name='python-fsmsock',
-    version='0.1',
+    version='0.2',
     description='Finite State Machine socket library for Python',
     author='Anton D. Kachalov',
     packages=find_packages(),

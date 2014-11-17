@@ -1,5 +1,6 @@
 from struct import pack, unpack
 import socket
+import logging
 
 from . import TcpTransport
 
@@ -103,13 +104,13 @@ class _RealcomCmdClient(TcpTransport):
         i = 0
         size = len(data)
         while (size):
-#            self._l.debug(data[i])
+#            logging.debug(data[i])
             if data[i] == CMD_POLLING:
                 if size < 3:
                     size = 0
                     continue
                 cmd = pack('3B', CMD_ALIVE, 1, data[i+2])
-#                self._l.debug("CMD:",cmd)
+#                logging.debug("CMD:",cmd)
                 nr = self._write(cmd)
                 flags = select.EPOLLIN
             else:
