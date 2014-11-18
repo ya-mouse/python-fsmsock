@@ -11,6 +11,7 @@ class FSMSock():
         self._fds = {}
         self._udptrans = None
         self._epoll = select.epoll()
+#        self._stats = { 'c': 0, 's': { 1:0, 2:0,3:0,4:0,5:0 }, 'i': 0, 'tm': 0 }
         atexit.register(self.atexit)
 
     def register(self, client):
@@ -57,16 +58,28 @@ class FSMSock():
                     if c.connected():
                         self._epoll.modify(fileno, flags)
 
-        # Iterate over clients
         tm = time()
+
+        # Init stats counters
+#        self._stats['i'] += 1
+#        if tm >= self._stats['tm']:
+#            i = self._stats['i']
+#            self._stats = { 'c': 0, 's': { 1:0, 2:0,3:0,4:0,5:0 }, 'i': i, 'tm': tm }
+
+        # Iterate over clients
         for c in self._cli:
-            if c.timeouted(tm):
-#                logger.debug('Timeouted: {0}'.format(c))
-                if not c.connected():
-#                    logger.debug('Not connected: {0}'.format(c))
-                    c.on_disconnect()
-            elif c.expired(tm):
+            if not c.timeouted(tm) and c.expired(tm):
+                if not c.connected(): # might be just c.connect() and check for `opt_autoreconnect' option
+                    c.connect()
                 c.queue()
+#            self._stats['s'][c._state] += 1
+
+        # Display stats
+#        if tm >= self._stats['tm']:
+#            self._stats['t'] -= self._stats['d']
+#            self._stats['c'] = len(self._cli)
+#            logging.info('STATS: {0}'.format(self._stats))
+#            self._stats = { 'c': 0, 's': { 1:0, 2:0,3:0,4:0,5:0 }, 'i': 0, 'tm': tm+30.0 }
 
     def run(self):
         return len(self._cli) > 0
