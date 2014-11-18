@@ -60,8 +60,8 @@ class Transport():
         if self._sock != None:
             self._sock.close()
         self._retries = 0
-        self._expire = time() + 15.0
-        self._timeout = self._expire
+        self._expire = time() + 60.0
+        self._timeout = self._expire + 15.0
 #        print('disconn', self, self._retries, self._state, self._timeout)
         self._state = self.INIT
 
