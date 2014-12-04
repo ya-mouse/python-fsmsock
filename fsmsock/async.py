@@ -76,7 +76,6 @@ class FSMSock():
 
         # Display stats
 #        if tm >= self._stats['tm']:
-#            self._stats['t'] -= self._stats['d']
 #            self._stats['c'] = len(self._cli)
 #            logging.info('STATS: {0}'.format(self._stats))
 #            self._stats = { 'c': 0, 's': { 1:0, 2:0,3:0,4:0,5:0 }, 'i': 0, 'tm': tm+30.0 }
@@ -101,6 +100,6 @@ class FSMSock():
         atexit.unregister(self.atexit)
         for c in self._cli:
             try:
-                c.disconnect()
+                c.shutdown()
             except:
                 pass

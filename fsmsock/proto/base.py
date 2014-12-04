@@ -68,6 +68,16 @@ class Transport():
     def on_disconnect(self):
         self.stop()
 
+    def on_expire(self):
+        return True
+
+    def on_timeout(self):
+        self.disconnect()
+        return False
+
+    def shutdown(self):
+        self.disconnect()
+
     def ready(self):
         return (self._state == self.READY)
 
@@ -99,8 +109,8 @@ class Transport():
         if rc:
             self._retries += 1
             if self._retries >= self._max_retries:
-                self.disconnect()
-                return False
+                return self.on_timeout()
+            return self.on_expire()
         return rc
 
     def timeouted(self, tm = None):
@@ -109,8 +119,7 @@ class Transport():
         if rc:
             self._retries += 1
             if self._retries >= self._max_retries:
-                self.disconnect()
-                return False
+                return self.on_timeout()
         return rc
 
     def connected(self):
@@ -138,9 +147,9 @@ class Transport():
 #            logging.debug("{0}: write failed".format(self._host))
         if tm == None:
             tm = time()
-        self._expire = tm + self._interval
+        self._expire = tm + 5.0
 #        if state != self.EXPIRED:
-        self._timeout = self._expire + 5.0
+        self._timeout = self._expire + 15.0
 #        logging.debug(self._host, ":", self._expire, self._timeout)
         return select.EPOLLIN
 
@@ -226,7 +235,7 @@ class TcpTransport(Transport):
             # Fallback to the generic socket, queue a retry
             self._sock = socket.socket(self._sock_params[0], self._sock_params[1])
             self._state = self.INIT
-            self._expire = self._timeout = time() + 5.0
+            self._expire = self._timeout = time() + 15.0
             return False
 
         self._fsm._fds[self.fileno()] = self
@@ -270,6 +279,8 @@ class TcpTransport(Transport):
         self._sock = None
 
 class UdpAbstractTransport(Transport):
+    SOCK_BUFSIZE = 8388544
+
     def __init__(self):
         self._cli = {}
         super().__init__(None, 0.0)
@@ -283,8 +294,8 @@ class UdpAbstractTransport(Transport):
         for b in socket.SO_RCVBUF, socket.SO_SNDBUF:
             bsize = self._sock.getsockopt(socket.SOL_SOCKET, b)
 #            logging.debug(b, ":", bsize)
-            if bsize < 8388544:
-                self._sock.setsockopt(socket.SOL_SOCKET, b, 8388544)
+            if bsize < UdpAbstractTransport.SOCK_BUFSIZE:
+                self._sock.setsockopt(socket.SOL_SOCKET, b, UdpAbstractTransport.SOCK_BUFSIZE)
 
         self._fsm._fds[self.fileno()] = self
         self._fsm._epoll.register(self.fileno(), select.EPOLLIN)
@@ -293,20 +304,20 @@ class UdpAbstractTransport(Transport):
     def process(self, nr = None):
         if nr == None:
             nr = 131070
-        data, sockaddr = self.read(nr)
-        if sockaddr == None:
-            return -1
-        cli = self._cli[sockaddr]
-        if len(data) == 0:
-            cli.disconnect()
-        elif cli._state != Transport.WAIT_ANSWER:
-            logging.warning("{0}: unordered answer [{1}]".format(cli._host, data))
-            cli.disconnect()
-            cli._unord = True
-            #data = ''
-            return -1
-        if cli.process_data(data):
-            cli.request()
+        while True:
+            data, sockaddr = self.read(nr)
+            if sockaddr == None:
+                return -1
+            cli = self._cli[sockaddr]
+            if len(data) == 0:
+                cli.disconnect()
+            elif cli._state != Transport.WAIT_ANSWER:
+                cli.on_unorder(data)
+                continue
+            self._expire += 5.0
+            self._timeout += 5.0
+            if cli.process_data(data):
+                cli.request()
         # We don't want EPOLLOUT to be set
         return -1
 
@@ -324,6 +335,13 @@ class UdpAbstractTransport(Transport):
 
     def request(self, tm = None):
         return False
+
+    def on_unorder(self, data):
+        logging.warning("{0}: unordered answer [{1}]".format(self, data))
+        self.stop()
+#        cli.disconnect()
+#        cli._unord = True
+        #data = ''
 
 class UdpTransport(Transport):
     def __init__(self, host, interval, port):
@@ -374,7 +392,8 @@ class UdpTransport(Transport):
         if self._sockaddr == None:
             # Fallback to the generic socket, queue a retry
             self._state = self.INIT
-            self._expire = self._timeout = time() + 5.0
+            self._expire = time() + 5.0
+            self._timeout = self._expire + 15.0
             return False
 
         self._state = self.READY
