@@ -27,7 +27,8 @@ class FSMSock():
                 del self._fds[fileno]
         except:
             pass
-        client.disconnect()
+        if client.connected():
+            client.disconnect()
 
     def connect(self, client):
         self.register(client)
