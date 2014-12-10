@@ -56,14 +56,14 @@ class Transport():
 
     def disconnect(self):
 #        import traceback
-        if self._sock != None:
-            self._sock.close()
         self._retries = 0
         self._expire = time() + 60.0
         self._timeout = self._expire + 15.0
 #        print('disconn', self, self._retries, self._state, self._timeout)
         self._state = self.INIT
         self.on_disconnect()
+        if self._sock != None:
+            self._sock.close()
 
     def on_disconnect(self):
         self.stop()
