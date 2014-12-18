@@ -1,4 +1,7 @@
+from Cython.Build import cythonize
+from Cython.Distutils import build_ext
 from setuptools import setup, find_packages
+from distutils.core import Extension
 
 dependency_links = []
 install_requires = []
@@ -12,12 +15,19 @@ with open('requirements.txt') as f:
             continue
         install_requires.append(line)
 
+exts = [
+    Extension('async', sources=['fsmsock/async.pyx']),
+    Extension('proto/base', sources=['fsmsock/proto/base.pyx']),
+    Extension('proto/realcom', sources=['fsmsock/proto/realcom.pyx']),
+]
+
 setup(
     name='python-fsmsock',
     version='0.2',
     description='Finite State Machine socket library for Python',
     author='Anton D. Kachalov',
-    packages=find_packages(),
+    ext_package='fsmsock',
+    ext_modules=cythonize(exts),
     platforms='any',
     zip_safe=False,
     include_package_data=True,

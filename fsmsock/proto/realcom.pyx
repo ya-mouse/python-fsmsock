@@ -1,5 +1,6 @@
 from struct import pack, unpack
 import socket
+import select
 import logging
 
 from . import TcpTransport
@@ -160,5 +161,5 @@ class RealcomClient(TcpTransport):
     def cmd(self):
         return self._cmd
 
-    def ready():
+    def ready(self):
         return self._cmd.ready() and super().ready()

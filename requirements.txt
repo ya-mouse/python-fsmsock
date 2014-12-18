@@ -4,3 +4,4 @@ pyasn1>=0.1.7
 #pycrypto>=2.6.1
 #https://github.com/ya-mouse/pylibssh2/archive/master.zip#egg=pylibssh2
 pyserial>=2.7
+cython >= 0.21
