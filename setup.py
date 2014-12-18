@@ -23,7 +23,7 @@ exts = [
 
 setup(
     name='python-fsmsock',
-    version='0.2',
+    version='0.3',
     description='Finite State Machine socket library for Python',
     author='Anton D. Kachalov',
     ext_package='fsmsock',
