@@ -1,5 +1,5 @@
-from Cython.Build import cythonize
-from Cython.Distutils import build_ext
+#from Cython.Build import cythonize
+#from Cython.Distutils import build_ext
 from setuptools import setup, find_packages
 from distutils.core import Extension
 
@@ -23,11 +23,12 @@ exts = [
 
 setup(
     name='python-fsmsock',
-    version='0.3',
+    version='0.2',
     description='Finite State Machine socket library for Python',
     author='Anton D. Kachalov',
-    ext_package='fsmsock',
-    ext_modules=cythonize(exts),
+#    ext_package='fsmsock',
+#    ext_modules=cythonize(exts),
+    packages=find_packages(),
     platforms='any',
     zip_safe=False,
     include_package_data=True,
