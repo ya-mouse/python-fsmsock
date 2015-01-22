@@ -174,7 +174,7 @@ class Transport():
         try:
             result = self._sock.send(data)
             return result
-        except socket.error as why:
+        except (OSError, socket.error) as why:
             if why.args[0] == EWOULDBLOCK:
                 return 0
             elif why.args[0] in _DISCONNECTED:
@@ -274,7 +274,10 @@ class TcpTransport(Transport):
 
     def disconnect(self):
         if self.connected():
-            self._sock.shutdown(socket.SHUT_RDWR)
+            try:
+                self._sock.shutdown(socket.SHUT_RDWR)
+            except:
+                pass
         super().disconnect()
         self._sock = None
 
