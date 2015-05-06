@@ -134,6 +134,9 @@ class _RealcomCmdClient(TcpTransport):
         return False
 
     def ready(self):
+        return self._state == self.READY
+
+    def configured(self):
         return self._state == self.CONFIGURED
 
     def request(self, tm = None):
@@ -144,10 +147,20 @@ class _RealcomCmdClient(TcpTransport):
 
 class RealcomClient(TcpTransport):
     def __init__(self, host, interval, port, cfg):
-        super().__init__(host, interval)
-        self._cmd = _RealcomCmdClient(self, port, cfg)
+        super().__init__(host, interval, (socket.AF_INET, socket.SOCK_STREAM, 950 + port))
+        self._cmd = _RealcomCmdClient(self, 950 + port, cfg)
+
+    def register(self, fsm):
+        self._cmd.register(fsm)
+        super().register(fsm)
+
+    def stop(self):
+        self._cmd.stop()
+        super().stop(fsm)
 
     def connect(self):
+        if not self._cmd.connected():
+            self._cmd.connect()
         if self.connected():
             return True
         self._bufidx = 0
@@ -155,6 +168,8 @@ class RealcomClient(TcpTransport):
 
     def send_buf(self):
         if self._cmd.ready():
+            self._cmd.request()
+        elif self._cmd.configured():
             return self._write(self._buf[self._bufidx])
         return 0
 
@@ -162,4 +177,4 @@ class RealcomClient(TcpTransport):
         return self._cmd
 
     def ready(self):
-        return self._cmd.ready() and super().ready()
+        return self._cmd.configured() and super().ready()
