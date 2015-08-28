@@ -138,6 +138,12 @@ class Transport():
         state = self._state
         if self._state == self.WAIT_ANSWER and not self.timeouted():
             return 0
+        if tm == None:
+            tm = time()
+        self._expire = tm + 5.0
+#        if state != self.EXPIRED:
+        self._timeout = self._expire + 15.0
+
         size = self.send_buf()
         if size > 0:
             self._state = self.WAIT_ANSWER
@@ -145,11 +151,6 @@ class Transport():
             return 0
 #        else:
 #            logging.debug("{0}: write failed".format(self._host))
-        if tm == None:
-            tm = time()
-        self._expire = tm + 5.0
-#        if state != self.EXPIRED:
-        self._timeout = self._expire + 15.0
 #        logging.debug(self._host, ":", self._expire, self._timeout)
         return select.EPOLLIN
 
