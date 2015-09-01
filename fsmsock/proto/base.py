@@ -162,7 +162,7 @@ class Transport():
         if len(data) == 0:
             return 0
         # If we didn't request anything
-        if self._state != self.WAIT_ANSWER:
+        if self._state not in (self.EXPIRED, self.WAIT_ANSWER):
             return 0
         return self.process_data(data)
 
