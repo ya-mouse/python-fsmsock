@@ -72,7 +72,10 @@ class FSMSock():
             if not c.timeouted(tm) and c.expired(tm):
                 if not c.connected(): # might be just c.connect() and check for `opt_autoreconnect' option
                     c.connect()
-                c.queue()
+                try:
+                    c.queue()
+                except:
+                    pass
 #            self._stats['s'][c._state] += 1
 
         # Display stats
