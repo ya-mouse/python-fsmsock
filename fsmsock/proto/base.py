@@ -20,7 +20,7 @@ class Transport():
     WAIT_ANSWER = 5
     LAST = WAIT_ANSWER
 
-    def __init__(self, host, interval):
+    def __init__(self, host, interval = 15.0):
         self._fsm = None
         self._sock = None
         self._host = host
@@ -50,15 +50,15 @@ class Transport():
             return True
         # Make connection within N-seconds depending on current client stack size
         self._expire = time() + (len(self._fsm._cli) / 10.0) % 5.0
-        # ...timeout within + 15.0 s
-        self._timeout = self._expire + 15.0
+        # ...timeout within + 5.0 s
+        self._timeout = self._expire + self._interval + 5.0
         return True
 
     def disconnect(self):
 #        import traceback
         self._retries = 0
-        self._expire = time() + 60.0
-        self._timeout = self._expire + 15.0
+        self._expire = time() + self._interval + 60.0
+        self._timeout = self._expire + self._interval + 5.0
 #        print('disconn', self, self._retries, self._state, self._timeout)
         self._state = self.INIT
         self.on_disconnect()
@@ -140,9 +140,9 @@ class Transport():
             return 0
         if tm == None:
             tm = time()
-        self._expire = tm + 5.0
+        self._expire = tm + self._interval
 #        if state != self.EXPIRED:
-        self._timeout = self._expire + 15.0
+        self._timeout = self._expire + self._interval + 5.0
 
         size = self.send_buf()
         if size > 0:
@@ -236,7 +236,8 @@ class TcpTransport(Transport):
             # Fallback to the generic socket, queue a retry
             self._sock = socket.socket(self._sock_params[0], self._sock_params[1])
             self._state = self.INIT
-            self._expire = self._timeout = time() + 15.0
+            self._expire = time() + self._interval
+            self._timeout = self._expire + self._interval + 5.0
             return False
 
         self._fsm._fds[self.fileno()] = self
@@ -318,8 +319,8 @@ class UdpAbstractTransport(Transport):
             elif cli._state != Transport.WAIT_ANSWER:
                 cli.on_unorder(data)
                 continue
-            self._expire += 5.0
-            self._timeout += 5.0
+            self._expire = time() + self._interval
+            self._timeout = self._expire + self._interval + 5.0
             if cli.process_data(data):
                 cli.request()
         # We don't want EPOLLOUT to be set
@@ -396,8 +397,8 @@ class UdpTransport(Transport):
         if self._sockaddr == None:
             # Fallback to the generic socket, queue a retry
             self._state = self.INIT
-            self._expire = time() + 5.0
-            self._timeout = self._expire + 15.0
+            self._expire += self._interval
+            self._timeout += self._interval
             return False
 
         self._state = self.READY
