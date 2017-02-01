@@ -392,7 +392,7 @@ class UdpTransport(Transport):
                 self._udp._cli[self._sockaddr] = self
                 break
         except Exception as e:
-            logging.critical(e)
+            logging.debug(e)
 
         if self._sockaddr == None:
             # Fallback to the generic socket, queue a retry
